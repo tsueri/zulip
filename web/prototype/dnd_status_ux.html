@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>PROTOTYPE · Do not disturb status UX</title>
+<style>
+:root {
+    --app-bg: hsl(210 18% 92%);
+    --panel: #fff;
+    --border: hsl(0 0% 90%);
+    --text: hsl(0 0% 15%);
+    --muted: hsl(0 0% 45%);
+    --hover: hsl(210 30% 96%);
+    --active-green: hsl(139 65% 39%);
+    --idle-orange: hsl(33 90% 52%);
+    --offline-gray: hsl(0 0% 68%);
+    --unread-blue: hsl(225 73% 57%);
+    --dnd-bg: hsl(38 100% 92%);
+    --dnd-border: hsl(38 90% 76%);
+    --dnd-text: hsl(28 75% 30%);
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: var(--app-bg);
+    color: var(--text);
+    font: 15px/1.4 system-ui, "Source Sans 3", sans-serif;
+    padding: 64px 32px 96px;
+}
+.proto-header { position: fixed; top: 0; left: 0; right: 0; padding: 10px 20px; background: hsl(0 0% 100% / 0.85); border-bottom: 1px solid var(--border); backdrop-filter: blur(4px); z-index: 50; }
+.proto-badge { background: hsl(0 75% 50%); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .08em; padding: 2px 7px; border-radius: 4px; margin-right: 8px; vertical-align: 2px; }
+.proto-header b { font-size: 14px; }
+#variant-desc { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+
+#state-bar { position: fixed; top: 58px; right: 20px; z-index: 40; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 10px hsl(0 0% 0% / .08); padding: 10px 12px; font-size: 13px; max-width: 330px; }
+#state-bar .readout { font: 12px/1.5 ui-monospace, monospace; color: var(--muted); margin-bottom: 8px; white-space: pre-wrap; }
+#state-bar .row { display: flex; gap: 6px; flex-wrap: wrap; }
+#state-bar button { font: inherit; font-size: 12.5px; border: 1px solid var(--border); background: var(--hover); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+#state-bar button.on { background: hsl(139 60% 88%); border-color: hsl(139 60% 70%); }
+#state-bar button.warn { background: var(--dnd-bg); border-color: var(--dnd-border); color: var(--dnd-text); }
+
+#collage { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; max-width: 1500px; margin: 118px auto 0; }
+.panel-label { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 2px; }
+.panel-note { font-size: 12.5px; color: var(--muted); margin: 8px 0 0 2px; max-width: 400px; }
+
+/* ---- shared popover/menu bits (copied conventions) ---- */
+.popover { background: var(--panel); border-radius: 8px; box-shadow: 0 5px 20px hsl(0 0% 0% / .18), 0 0 0 1px hsl(0 0% 0% / .05); width: 300px; overflow: hidden; }
+ul.menu { list-style: none; margin: 0; padding: 4px 6px; }
+ul.menu li { border-radius: 6px; }
+ul.menu .row-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; cursor: pointer; }
+ul.menu .row-item:hover { background: var(--hover); }
+ul.menu .row-item .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.menu .icon { width: 18px; text-align: center; flex: none; color: var(--muted); }
+ul.menu .sep { height: 1px; background: var(--border); margin: 5px 8px; cursor: default; }
+ul.menu .sep:hover { background: var(--border); }
+.menu .sub { display: block; font-size: 12.5px; color: var(--muted); }
+.menu .hint { font-size: 11px; color: hsl(0 0% 62%); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
+
+.personal-header { display: flex; gap: 12px; padding: 14px 14px 10px; }
+.avatar { position: relative; width: 52px; height: 52px; border-radius: 50%; flex: none; background: linear-gradient(135deg, hsl(210 40% 60%), hsl(280 35% 60%)); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; }
+.avatar .pdot { position: absolute; right: -1px; bottom: -1px; width: 15px; height: 15px; border-radius: 50%; border: 2.5px solid #fff; }
+.pdot.active { background: var(--active-green); }
+.pdot.idle { background: var(--idle-orange); }
+.pdot.offline { background: #fff; }
+.pdot.offline::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--offline-gray); }
+.personal-header .name { font-weight: 650; margin: 0; }
+.personal-header .type { margin: 1px 0 0; font-size: 13px; color: var(--muted); }
+
+.status-row { display: flex; align-items: center; gap: 9px; padding: 7px 10px; margin: 0 6px; border-radius: 6px; }
+.status-row:hover { background: var(--hover); }
+.status-row .st { flex: 1; min-width: 0; color: hsl(210 20% 35%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-row .st i { color: var(--muted); }
+.status-row .x { color: hsl(0 0% 55%); cursor: pointer; border: none; background: none; font-size: 15px; padding: 2px; border-radius: 4px; }
+.status-row .x:hover { color: hsl(0 0% 25%); background: hsl(0 0% 90%); }
+
+/* ---- status picker modal ---- */
+.modal { width: 384px; background: var(--panel); border-radius: 8px; box-shadow: 0 10px 40px hsl(0 0% 0% / .25), 0 0 0 1px hsl(0 0% 0% / .05); padding: 18px 18px 16px; }
+.modal h4 { margin: 0 0 12px; font-size: 15px; font-weight: 650; }
+.input-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px; outline: 1px solid hsl(0 0% 0% / 45%); outline-offset: -1px; border-radius: 4px; background: var(--panel); padding: 3px 4px 3px 3px; }
+.input-row .emoji-btn { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; font-size: 17px; }
+.input-row .emoji-btn:hover { background: var(--hover); }
+.input-row input { border: none; outline: none; font: inherit; padding: 4px 2px; background: transparent; }
+.input-row .clear-btn { border: 1px solid var(--border); background: var(--hover); border-radius: 4px; width: 28px; height: 28px; cursor: pointer; color: var(--muted); font-size: 13px; }
+.options { list-style: none; margin: 14px 0 0; padding: 0; }
+.options li a { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 4px; cursor: pointer; }
+.options li a:hover { background: var(--hover); }
+.options li a.current { background: hsl(210 60% 94%); }
+.options .em { width: 22px; text-align: center; font-size: 16px; flex: none; }
+.dnd-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; background: var(--dnd-bg); border: 1px solid var(--dnd-border); margin-bottom: 12px; }
+.dnd-banner .em { font-size: 18px; }
+.dnd-banner .t { flex: 1; min-width: 0; }
+.dnd-banner .t b { font-size: 14px; color: var(--dnd-text); }
+.dnd-banner .t .sub { display: block; font-size: 12.5px; color: var(--dnd-text); opacity: .85; }
+.dnd-opt { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 4px; cursor: pointer; border: none; background: none; font: inherit; text-align: left; }
+.dnd-opt:hover { background: var(--hover); }
+.dnd-opt.active { background: hsl(210 60% 94%); }
+.dnd-opt .t { flex: 1; min-width: 0; }
+.dnd-opt .t b { font-size: 14px; font-weight: 600; }
+.dnd-opt .t .sub { display: block; font-size: 12.5px; color: var(--muted); }
+.dnd-opt .em { width: 22px; text-align: center; font-size: 16px; flex: none; }
+
+/* switch */
+.switch { position: relative; width: 34px; height: 20px; flex: none; cursor: pointer; }
+.switch input { display: none; }
+.switch .track { position: absolute; inset: 0; border-radius: 20px; background: hsl(0 0% 82%); transition: background .12s; }
+.switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px hsl(0 0% 0% / .3); transition: left .12s; }
+.switch input:checked ~ .track { background: var(--active-green); }
+.switch input:checked ~ .knob { left: 16px; }
+
+/* ---- user card ---- */
+.usercard { width: 340px; }
+.card-header { display: flex; gap: 14px; padding: 16px 14px 12px; align-items: center; }
+.card-header .avatar { width: 68px; height: 68px; font-size: 26px; }
+.card-header .pdot { width: 19px; height: 19px; }
+.card-header .name { font-size: 17px; font-weight: 650; margin: 0; }
+.card-header .type { margin: 2px 0 0; font-size: 13.5px; color: var(--muted); }
+
+/* dnd treatments to others */
+.badge-emoji { font-size: 15px; }
+.dnd-pill { display: inline-flex; align-items: center; gap: 4px; background: var(--dnd-bg); border: 1px solid var(--dnd-border); color: var(--dnd-text); font-size: 11.5px; font-weight: 600; border-radius: 20px; padding: 1px 7px 1px 6px; vertical-align: 2px; white-space: nowrap; flex: none; }
+.dnd-info-row .label { color: var(--dnd-text); font-weight: 550; }
+
+/* ---- buddy list ---- */
+.buddy { width: 285px; background: var(--panel); border-radius: 8px; box-shadow: 0 5px 20px hsl(0 0% 0% / .12), 0 0 0 1px hsl(0 0% 0% / .05); padding: 10px 6px 6px; }
+.buddy .head { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); padding: 0 12px 8px; display: flex; justify-content: space-between; }
+.buddy ul { list-style: none; margin: 0; padding: 0; }
+.buddy li.brow { display: block; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
+.buddy li.brow:hover { background: var(--hover); }
+.brow .line1 { display: flex; align-items: center; gap: 7px; }
+.brow .pdot-solo { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.brow .pname { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brow .status-text { display: block; margin: 0 0 0 19px; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brow .unread { margin-left: auto; background: var(--unread-blue); color: #fff; font-size: 11.5px; font-weight: 650; border-radius: 9px; padding: 0 6px; flex: none; }
+
+/* ---- switcher ---- */
+#switcher { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: hsl(220 15% 18%); color: #fff; border-radius: 30px; display: flex; align-items: center; gap: 10px; padding: 8px 12px; box-shadow: 0 6px 24px hsl(0 0% 0% / .35); z-index: 60; font-size: 13.5px; }
+#switcher button { border: none; background: hsl(0 0% 100% / .15); color: #fff; border-radius: 50%; width: 26px; height: 26px; cursor: pointer; font-size: 14px; }
+#switcher button:hover { background: hsl(0 0% 100% / .3); }
+#switcher .vname { min-width: 190px; text-align: center; }
+
+/* ---- toasts ---- */
+#toasts { position: fixed; bottom: 70px; right: 20px; z-index: 70; display: flex; flex-direction: column; gap: 8px; }
+.toast { background: hsl(220 15% 18%); color: #fff; border-radius: 8px; padding: 10px 14px; font-size: 13.5px; max-width: 340px; box-shadow: 0 4px 16px hsl(0 0% 0% / .3); animation: pop .15s ease-out; }
+.toast.warn { background: hsl(12 60% 40%); }
+@keyframes pop { from { transform: translateY(6px); opacity: 0; } }
+</style>
+</head>
+<body>
+<div class="proto-header">
+    <span class="proto-badge">PROTOTYPE</span><b>Do not disturb status UX</b> — throwaway, not for merge
+    <p id="variant-desc"></p>
+</div>
+<div id="state-bar"></div>
+<main id="collage">
+    <section><p class="panel-label">Status picker (modal)</p><div id="picker"></div></section>
+    <section><p class="panel-label">Personal menu (yours)</p><div id="menu"></div></section>
+    <section><p class="panel-label">User card — teammate view</p><div id="card"></div></section>
+    <section><p class="panel-label">Buddy list (right sidebar)</p><div id="buddy"></div></section>
+</main>
+<div id="switcher"></div>
+<div id="toasts"></div>
+
+<script>
+"use strict";
+
+const VARIANTS = {
+    A: {
+        name: "A · Status message",
+        desc: "DND is a default status message — picker entry only, no personal-menu toggle, and to others it is indistinguishable from any status. Try: click ✕ in the picker while DND is on, or type over your status.",
+    },
+    B: {
+        name: "B · Dedicated switch",
+        desc: "DND is a dedicated switch: its own row in the picker, plus a personal-menu item placed next to “Go invisible”. To others: a moon badge in the status-emoji slot, composing with status text.",
+    },
+    C: {
+        name: "C · Own state",
+        desc: "DND is its own visible state: a banner in the picker and a header control in the personal menu (kept apart from “Go invisible”). To others: an explicit “Do not disturb” pill, independent of status text.",
+    },
+};
+
+const DEFAULTS = [
+    { emoji: "💼", text: "Busy" },
+    { emoji: "📅", text: "In a meeting" },
+    { emoji: "🚌", text: "Commuting" },
+    { emoji: "🤒", text: "Out sick" },
+    { emoji: "🌴", text: "Vacationing" },
+    { emoji: "🏠", text: "Working remotely" },
+    { emoji: "🏢", text: "At the office" },
+];
+const DND_TEXT = "Do not disturb";
+
+const state = {
+    variant: "A",
+    dnd: true,
+    statusText: null,
+    invisible: false,
+};
+
+/* ---------- actions ---------- */
+
+function setDnd(on, {viaStatus = false} = {}) {
+    if (state.variant === "A" && on) {
+        state.statusText = DND_TEXT; // in A, DND is literally your status message
+    }
+    state.dnd = on;
+    if (!viaStatus) {
+        if (!on && state.variant === "A" && state.statusText === DND_TEXT) {
+            toast("Push notifications resumed — but your status still says “Do not disturb”. Clear it separately.", "warn");
+        }
+    }
+    render();
+}
+
+function toggleDnd() { setDnd(!state.dnd); }
+
+function setStatus(text) {
+    if (state.variant === "A" && text !== null && text !== DND_TEXT && state.dnd) {
+        state.dnd = false;
+        toast("Typing over your status silently ended Do not disturb — push notifications resumed.", "warn");
+    }
+    state.statusText = text;
+    render();
+}
+
+function clearStatus() {
+    if (state.variant === "A" && state.dnd) {
+        state.dnd = false;
+        state.statusText = null;
+        toast("Clearing your status also ended Do not disturb — push notifications will resume.", "warn");
+    } else {
+        state.statusText = null;
+        toast("Status cleared. Do not disturb stays on.");
+    }
+    render();
+}
+
+function toggleInvisible() {
+    state.invisible = !state.invisible;
+    toast(state.invisible ? "Invisible mode on — you appear offline." : "Invisible mode off.");
+    render();
+}
+
+function setVariant(v) {
+    state.variant = v;
+    if (v === "A" && state.dnd && state.statusText !== DND_TEXT) {
+        state.statusText = DND_TEXT; // A normalizes: DND status replaces whatever text
+    }
+    const url = new URL(location.href);
+    url.searchParams.set("variant", v);
+    history.replaceState(null, "", url);
+    render();
+}
+
+function toast(msg, kind) {
+    const el = document.createElement("div");
+    el.className = "toast" + (kind ? " " + kind : "");
+    el.textContent = msg;
+    document.getElementById("toasts").append(el);
+    setTimeout(() => el.remove(), 4200);
+}
+
+/* ---------- render helpers ---------- */
+
+function pdotDot(cls) { return `<span class="pdot ${cls}"></span>`; }
+function soloDot(cls) {
+    const colors = { active: "var(--active-green)", idle: "var(--idle-orange)", offline: "var(--offline-gray)" };
+    return `<span class="pdot-solo" style="background:${colors[cls]}"></span>`;
+}
+function switchHtml(on, action) {
+    return `<label class="switch"${action ? ` data-action="${action}"` : ""}><input type="checkbox" ${on ? "checked" : ""}/><span class="track"></span><span class="knob"></span></label>`;
+}
+function dndMoon() { return `<span class="badge-emoji">🌙</span>`; }
+function dndPill() { return `<span class="dnd-pill">🔕 Do not disturb</span>`; }
+
+/* ---------- surfaces ---------- */
+
+function renderPicker() {
+    const v = state.variant;
+    const emoji = state.statusText ? statusEmojiFor(state.statusText) : "🙂";
+    let html = `<div class="modal"><h4>Set status</h4>`;
+
+    if (v === "C") {
+        html += `<div class="dnd-banner"><span class="em">🔕</span><span class="t"><b>Do not disturb</b><span class="sub">Pause all push notifications</span></span>${switchHtml(state.dnd, "toggle-dnd")}</div>`;
+    }
+
+    html += `<div class="input-row"><span class="emoji-btn">${emoji}</span><input type="text" placeholder="Your status" maxlength="60" value="${esc(state.statusText ?? "")}"/><button class="clear-btn" data-action="clear-status" title="Clear status">✕</button></div><ul class="options">`;
+
+    if (v === "B") {
+        html += `<li><button class="dnd-opt ${state.dnd ? "active" : ""}" data-action="toggle-dnd"><span class="em">🌙</span><span class="t"><b>Do not disturb</b><span class="sub">Pause mobile push notifications</span></span>${switchHtml(state.dnd, "")}</button></li>`;
+        html += `<li class="sep-holder"><div class="sep"></div></li>`;
+    }
+    if (v === "A") {
+        html += `<li><a class="${state.dnd ? "current" : ""}" data-action="a-pick-dnd"><span class="em">🌙</span><span class="st">${DND_TEXT}</span></a></li>`;
+    }
+    for (const d of DEFAULTS) {
+        html += `<li><a class="${state.statusText === d.text && !state.dnd ? "current" : ""}" data-action="set-status" data-text="${esc(d.text)}"><span class="em">${d.emoji}</span><span class="st">${d.text}</span></a></li>`;
+    }
+    html += `</ul><p class="panel-note">${pickerNote()}</p></div>`;
+    return html;
+}
+
+function pickerNote() {
+    if (state.variant === "A") {
+        return state.dnd
+            ? "DND is your status message right now — clearing or editing it ends suppression."
+            : "Picking 🌙 Do not disturb sets it as your status message (and pauses push).";
+    }
+    if (state.variant === "B") {
+        return "DND toggles independently of your status text — clear status never touches it.";
+    }
+    return "DND lives in a banner above the status field; the two are separate controls.";
+}
+
+function statusEmojiFor(text) {
+    if (text === DND_TEXT) { return "🌙"; }
+    const d = DEFAULTS.find((x) => x.text === text);
+    return d ? d.emoji : "💬";
+}
+
+function renderMenu() {
+    const v = state.variant;
+    const dot = state.invisible ? "offline" : "active";
+    let html = `<div class="popover">`;
+    html += `<div class="personal-header"><div class="avatar">${pdotDot(dot)}</div><div><p class="name">Jordan Lee</p><p class="type">Member</p></div></div>`;
+
+    if (v === "C") {
+        html += `<div class="dnd-banner" style="margin:0 10px 10px"><span class="em">🔕</span><span class="t"><b>Do not disturb</b><span class="sub">Pause all push notifications</span></span>${switchHtml(state.dnd, "toggle-dnd")}</div>`;
+        html += `<ul class="menu"><li class="sep-holder"><div class="sep"></div></li>`;
+    } else {
+        html += `<ul class="menu">`;
+    }
+    const statusEmoji = state.statusText ? statusEmojiFor(state.statusText) : "";
+    html += `<li><div class="status-row"><span>${statusEmoji}</span><span class="st">${state.statusText ? esc(state.statusText) : "<i>No status text</i>"}</span><button class="x" data-action="clear-status" title="Clear status">✕</button></div></li>`;
+    html += `<li><div class="row-item" data-action="open-picker"><span class="icon">🙂</span><span class="label">Edit status</span><span class="hint">⇧Y</span></div></li>`;
+
+    if (v === "B") {
+        html += `<li><div class="row-item" data-action="toggle-dnd"><span class="icon">${state.dnd ? "🔕" : "🔔"}</span><span class="label">${state.dnd ? "Turn off Do not disturb" : "Do not disturb"}</span></div></li>`;
+    }
+    html += `<li><div class="row-item" data-action="toggle-invisible"><span class="icon">${state.invisible ? "◎" : "◉"}</span><span class="label">${state.invisible ? "Turn off invisible mode" : "Go invisible"}</span></div></li>`;
+    html += `<li class="sep-holder"><div class="sep"></div></li>`;
+    html += `<li><div class="row-item"><span class="icon">👤</span><span class="label">View your profile</span></div></li>`;
+    html += `<li><div class="row-item"><span class="icon">💬</span><span class="label">View messages with yourself</span></div></li>`;
+    html += `<li><div class="row-item"><span class="icon">📨</span><span class="label">View messages sent</span></div></li>`;
+    html += `<li class="sep-holder"><div class="sep"></div></li>`;
+    html += `<li><div class="row-item"><span class="icon">⚙️</span><span class="label">Settings</span></div></li>`;
+    html += `<li><div class="row-item"><span class="icon">🎨</span><span class="label">Theme: ☀ / 🌙</span></div></li>`;
+    html += `<li class="sep-holder"><div class="sep"></div></li>`;
+    html += `<li><div class="row-item"><span class="icon">⎋</span><span class="label">Log out</span></div></li>`;
+    html += `</ul></div>`;
+
+    if (v === "A") {
+        html += `<p class="panel-note">No DND control here in variant A — you manage it only through the status picker.</p>`;
+    } else if (v === "B") {
+        html += `<p class="panel-note">Reaction point: the DND item sits directly above “Go invisible” — two adjacent toggles. Conflated, or right where your thumb already is?</p>`;
+    } else {
+        html += `<p class="panel-note">Reaction point: the DND switch sits at the top of the menu, deliberately away from “Go invisible”.</p>`;
+    }
+    return html;
+}
+
+function renderCard() {
+    const v = state.variant;
+    let statusRow = "";
+    let infoRow = "";
+    if (v === "A") {
+        statusRow = `<li><div class="status-row"><span>🌙</span><span class="st">${DND_TEXT}</span></div></li>`;
+    } else if (v === "B") {
+        statusRow = `<li><div class="status-row"><span>🌙</span><span class="st"><i>No status text</i></span></div></li>`;
+    } else {
+        infoRow = `<li class="dnd-info-row"><div class="row-item"><span class="icon">🔕</span><span class="label">Do not disturb — push notifications paused</span></div></li>`;
+    }
+    const html = `<div class="popover usercard">
+        <div class="card-header"><div class="avatar">${pdotDot("active")}</div><div><p class="name">Nora Chen</p><p class="type">Member</p></div></div>
+        <ul class="menu">
+            ${statusRow}${infoRow}
+            <li class="sep-holder"><div class="sep"></div></li>
+            <li><div class="row-item"><span class="icon">👤</span><span class="label">View profile</span></div></li>
+            <li><div class="row-item"><span class="icon">✉️</span><span class="label">Send direct message</span></div></li>
+            <li><div class="row-item"><span class="icon">@</span><span class="label">Copy mention syntax</span></div></li>
+            <li><div class="row-item"><span class="icon">💬</span><span class="label">View direct messages</span></div></li>
+            <li><div class="row-item"><span class="icon">📨</span><span class="label">View messages sent</span></div></li>
+        </ul></div>
+        <p class="panel-note">Nora is DND-only (no status text). Variant A still shows a full status; B shows only a moon badge; C shows an explicit line.</p>`;
+    return html;
+}
+
+function renderBuddy() {
+    const v = state.variant;
+    const rows = [];
+
+    // Self row — reflects the live state.
+    const selfDot = state.invisible ? "offline" : "active";
+    let selfExtras = "";
+    let selfLine2 = "";
+    if (state.dnd) {
+        if (v === "A") {
+            selfLine2 = DND_TEXT;
+        } else if (v === "B") {
+            selfExtras = dndMoon();
+        } else {
+            selfExtras = dndPill();
+        }
+    }
+    if (v === "B" && state.statusText) { selfLine2 = state.statusText; }
+    if (v === "C" && state.statusText) { selfLine2 = state.statusText; }
+    if (!state.dnd && state.statusText && v === "A") { selfLine2 = state.statusText; }
+    rows.push(buddyRow(selfDot, "Jordan Lee", selfExtras, selfLine2, 0, true));
+
+    // Nora — DND-only, active.
+    let noraExtra = "", noraL2 = "";
+    if (v === "A") { noraL2 = DND_TEXT; }
+    else if (v === "B") { noraExtra = dndMoon(); }
+    else { noraExtra = dndPill(); }
+    rows.push(buddyRow("active", "Nora Chen", noraExtra, noraL2, 3));
+
+    // Ravi — DND + status text, idle.
+    let raviExtra = "", raviL2 = "";
+    if (v === "A") { raviL2 = DND_TEXT; }
+    else if (v === "B") { raviExtra = dndMoon(); raviL2 = "In a meeting"; }
+    else { raviExtra = dndPill(); raviL2 = "In a meeting"; }
+    rows.push(buddyRow("idle", "Ravi Patel", raviExtra, raviL2, 0));
+
+    // Cordelia — plain, active.
+    rows.push(buddyRow("active", "Cordelia Garcia", "", "", 12));
+
+    // Sam — plain status, offline.
+    rows.push(buddyRow("offline", "Sam Alvarez", "🌴", "Vacationing", 0));
+
+    return `<div class="buddy"><div class="head"><span>PEOPLE</span><span>ⓘ</span></div><ul>${rows.join("")}</ul></div>
+    <p class="panel-note">Green/orange/gray dots are presence — unchanged by DND in every variant. Nora & Ravi show how DND-only and DND+text render to teammates.</p>`;
+}
+
+function buddyRow(dot, name, extra, line2, unread, isSelf = false) {
+    return `<li class="brow ${isSelf ? "self" : ""}"><div class="line1">${soloDot(dot)}<span class="pname">${esc(name)}</span>${extra}${unread ? `<span class="unread">${unread}</span>` : ""}</div>${line2 ? `<span class="status-text">${esc(line2)}</span>` : ""}</li>`;
+}
+
+/* ---------- state bar & switcher ---------- */
+
+function renderStateBar() {
+    const readout = `variant: ${state.variant}\ndnd: ${state.dnd ? "ON" : "off"} · status: ${state.statusText ? `“${state.statusText}”` : "—"} · invisible: ${state.invisible ? "on" : "off"}`;
+    const html = `<div class="readout">${readout}</div><div class="row">
+        <button class="${state.dnd ? "on" : ""}" data-action="toggle-dnd">🌙 DND ${state.dnd ? "on" : "off"}</button>
+        <button data-action="set-status" data-text="In a meeting">📅 Set “In a meeting”</button>
+        <button data-action="clear-status">✕ Clear status</button>
+        <button class="${state.invisible ? "on" : ""}" data-action="toggle-invisible">◉ Invisible</button>
+    </div>`;
+    document.getElementById("state-bar").innerHTML = html;
+}
+
+function renderSwitcher() {
+    const order = ["A", "B", "C"];
+    const idx = order.indexOf(state.variant);
+    const prev = order[(idx + order.length - 1) % order.length];
+    const next = order[(idx + 1) % order.length];
+    document.getElementById("switcher").innerHTML = `<button data-action="set-variant" data-v="${prev}" title="Previous variant">←</button><span class="vname">${VARIANTS[state.variant].name}</span><button data-action="set-variant" data-v="${next}" title="Next variant">→</button>`;
+}
+
+/* ---------- wiring ---------- */
+
+const ENT_AMP = "&" + "amp;";
+const ENT_LT = "&" + "lt;";
+const ENT_QUOT = "&" + "quot;";
+function esc(s) { return s.replace(/&/g, ENT_AMP).replace(/</g, ENT_LT).replace(/"/g, ENT_QUOT); }
+
+function render() {
+    document.getElementById("picker").innerHTML = renderPicker();
+    document.getElementById("menu").innerHTML = renderMenu();
+    document.getElementById("card").innerHTML = renderCard();
+    document.getElementById("buddy").innerHTML = renderBuddy();
+    renderStateBar();
+    renderSwitcher();
+    document.getElementById("variant-desc").textContent = VARIANTS[state.variant].desc;
+}
+
+document.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-action]");
+    if (!t) { return; }
+    const action = t.dataset.action;
+    if (action === "toggle-dnd") { e.preventDefault(); toggleDnd(); }
+    else if (action === "set-status") { setStatus(t.dataset.text); }
+    else if (action === "a-pick-dnd") { setDnd(!state.dnd, {viaStatus: true}); }
+    else if (action === "clear-status") { clearStatus(); }
+    else if (action === "toggle-invisible") { toggleInvisible(); }
+    else if (action === "set-variant") { setVariant(t.dataset.v); }
+    else if (action === "open-picker") {
+        document.getElementById("picker").scrollIntoView({behavior: "smooth", block: "center"});
+    }
+});
+
+// The picker input edits your status text live; in variant A this exposes the
+// "typing over your status ends DND" conflation.
+document.addEventListener("input", (e) => {
+    if (e.target.matches(".input-row input")) {
+        const val = e.target.value;
+        setStatus(val === "" ? null : val);
+    }
+});
+
+document.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") { return; }
+    const el = document.activeElement;
+    if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) { return; }
+    const order = ["A", "B", "C"];
+    const idx = order.indexOf(state.variant);
+    const dir = e.key === "ArrowLeft" ? -1 : 1;
+    setVariant(order[(idx + dir + order.length) % order.length]);
+});
+
+/* ---------- boot ---------- */
+const initial = new URLSearchParams(location.search).get("variant");
+setVariant(VARIANTS[initial] ? initial : "A");
+</script>
+</body>
+</html>
